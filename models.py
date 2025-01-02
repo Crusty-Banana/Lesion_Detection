@@ -252,8 +252,8 @@ class Classifier(nn.Module):
     def __init__(
         self,
         device,
-        pixel_mean,
-        pixel_std,
+        pixel_mean = [103.530, 116.280, 123.675],
+        pixel_std = [1.,1.,1.],
         classes = ["Abnormal"],
         in_features = ["dense4"],
         backbone_depth = 121,
@@ -284,7 +284,7 @@ class Classifier(nn.Module):
         # Backbone initialization
         self.backbone = CustomDenseNet(
             pretrained=True,
-            input_shape=nn.ModuleDict({"channels": 3}),
+            input_shape=nn.ModuleDict({"channels": len(pixel_mean)}),
             depth=backbone_depth,
             out_features=backbone_out_features,
         )
@@ -379,3 +379,5 @@ class Classifier(nn.Module):
         stacked_logits = torch.stack(logits)
         scores = stacked_logits.mean(dim=0).sigmoid_()
         return scores
+    
+    
