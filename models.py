@@ -147,10 +147,10 @@ class CustomLesionDetector:
 
    
 class CustomDenseNet(_nn.Module):
-    def __init__(self, pretrained, input_shape, depth, out_features,):
+    def __init__(self, pretrained, input_channels, depth, out_features,):
         super().__init__()
         
-        assert input_shape.channels == 3
+        assert input_channels == 3
         assert depth in [121,161,169,201]
         
         for name in out_features:
@@ -284,7 +284,7 @@ class Classifier(nn.Module):
         # Backbone initialization
         self.backbone = CustomDenseNet(
             pretrained=True,
-            input_shape=nn.ModuleDict({"channels": len(pixel_mean)}),
+            input_channels = len(pixel_mean),
             depth=backbone_depth,
             out_features=backbone_out_features,
         )
