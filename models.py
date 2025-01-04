@@ -6,40 +6,19 @@ import torch.nn.functional as _F
 
 import torch
 import torchvision
-from torchvision.models.detection import FasterRCNN
-from torchvision.models.detection.rpn import AnchorGenerator
-from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
-
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor, FasterRCNN_ResNet50_FPN_Weights
 from sklearn.metrics import confusion_matrix, accuracy_score
 
-class CustomFasterRCNN(_nn.Module):
-    def __init__(self,
-                    num_classes: int=8):
-        super().__init__()
+def get_custom_faster_rcnn_model(num_classes=9):
+    model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True, weights=FasterRCNN_ResNet50_FPN_Weights.DEFAULT)
+    in_features = model.roi_heads.box_predictor.cls_score.in_features
+    model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
 
-        anchor_generator = AnchorGenerator(
-            sizes=((32, 64, 128, 256, 512),),
-            aspect_ratios=((0.5, 1.0, 2.0),) * 5,
-        )
-        roi_pooler = torchvision.ops.MultiScaleRoIAlign(
-            featmap_names=["0", "1", "2", "3"],
-            output_size=7,
-            sampling_ratio=2,
-        )
-        self.backbone = resnet_fpn_backbone('resnet50', pretrained=True)
-        self.model = FasterRCNN(
-            self.backbone,
-            num_classes=num_classes,
-            rpn_anchor_generator=anchor_generator,
-            box_roi_pool=roi_pooler,
-        )
-
-    def forward(self, images, targets=None):
-        return self.model(images, targets)
+    return model
     
 class CustomLesionDetector:
 
-    def __init__(self, model, device: str="cuda:2"):
+    def __init__(self, model, device: str="cuda"):
         """Initialize the model for lesion detection.
 
         Args:
@@ -66,17 +45,17 @@ class CustomLesionDetector:
             self.model.train()
             total_loss = 0
             for batch in tqdm(train_dataloader, desc=f"Training Epoch {epoch + 1}/{epochs}", leave=False):
-                optimizer.zero_grad()
-
-                images = batch['image'].to(self.device)
-                targets  = batch['target'].to(self.device)
+                images, targets = batch
+                images = list(image.to(self.device) for image in images)
+                targets = [{k: v.clone().detach().to(self.device) for k, v in t.items()} for t in targets]
 
                 loss_dict = self.model(images, targets)
                 losses = sum(loss for loss in loss_dict.values())
+                total_loss += losses.item()
+
+                optimizer.zero_grad()
                 losses.backward()
                 optimizer.step()
-
-                total_loss += losses.item()
 
             avg_train_loss = total_loss / len(train_dataloader)
             print(f"Epoch {epoch + 1}/{epochs}, Training Loss: {avg_train_loss:.4f}")
@@ -95,13 +74,15 @@ class CustomLesionDetector:
         # Wrap the validation dataloader with tqdm to show progress
         with torch.no_grad():
             for batch in tqdm(val_dataloader, desc="Evaluating", leave=False):
-                images = batch['image'].to(self.device)
-                targets  = batch['target'].to(self.device)
+                images, targets = batch
+                images = list(image.to(self.device) for image in images)
+                targets = [{k: v.clone().detach().to(self.device) for k, v in t.items()} for t in targets]
 
                 predictions = self.model(images)
-
+                pred_box, pred_label, pred_score = predictions["boxes"], predictions["labels"], predictions["scores"]
+                
                 all_labels.extend(targets["labels"].cpu().numpy())
-                all_predictions.extend(predictions["labels"].cpu().numpy())
+                all_predictions.extend(pred_label.cpu().numpy())
 
         accuracy = accuracy_score(all_labels, all_predictions)
         print(f"Validation Accuracy: {accuracy:.4f}")
