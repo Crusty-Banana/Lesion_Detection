@@ -29,9 +29,18 @@ class LesionDataset(torch.utils.data.Dataset):
             "Other lesions": 7,
             "No finding": 8,
         }
+        grouped = self.data.groupby('image_id')
+        self.data_by_image = [
+            {
+                "image_id": image_id,
+                "boxes": grouped.get_group(image_id)[['xmin', 'ymin', 'xmax', 'ymax']].values.tolist(),
+                "labels": grouped.get_group(image_id)['lesion_type'].map(self.label_map).values.tolist()
+            }
+            for image_id in grouped.groups
+        ]
 
     def __len__(self):
-        return len(self.data)
+        return len(self.data_by_image)
 
     def __getitem__(self, idx):
         """
@@ -41,7 +50,7 @@ class LesionDataset(torch.utils.data.Dataset):
         Returns:
             dict: A dictionary with `images` (torch.Tensor) and `targets` (dict with keys `boxes` and `labels`).
         """
-        record = self.data.iloc[idx]
+        record = self.data_by_image[idx]
 
         # Load DICOM image
         image_path = os.path.join(self.image_dir, f"{record['image_id']}.dicom")
@@ -54,11 +63,10 @@ class LesionDataset(torch.utils.data.Dataset):
         # Normalize to [0, 1] and convert to 3-channel format
         image = F.convert_image_dtype(image, dtype=torch.float32)
         image = image.expand(3, -1, -1)  # Convert to 3 channels (RGB-like)
-        image = self.transforms(image)
+        # image = self.transforms(image)
 
-        xmin, ymin, xmax, ymax = float(record["xmin"]), float(record["ymin"]), float(record["xmax"]), float(record["ymax"])
-        boxes = torch.tensor([[xmin, ymin, xmax, ymax]], dtype=torch.float32)
-        labels = torch.tensor([self.label_map[record["lesion_type"]]], dtype=torch.int64)
+        boxes = torch.tensor(record["boxes"], dtype=torch.float32)
+        labels = torch.tensor(record["labels"], dtype=torch.int64)
 
         # Prepare target dictionary
         target = {
