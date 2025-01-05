@@ -1,2 +1,5 @@
 venv
 data
+test.py
+__pycache__/
+models/

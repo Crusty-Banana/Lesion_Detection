@@ -36,3 +36,7 @@ c is choosen to maximize Youden index J(c) = q(c) + r(c) − 1. q is sensitivity
     - image_id: id of image
     - lesion_type: osteophytes, disc space narrowing, surgical implant, foraminal stenosis, spondylolysthesis, vertebral collapse, and other lesions.
     - xmin, ymin, xmax, ymax: bounding box.
+
+
+XG9ebRtEFY3EPKs
+wget -r -N -c -np --user crustybanana --ask-password https://physionet.org/files/vindr-spinexr/1.0.0/train_images/0c89242a97a3a080b70c3957728a1e89.dicom

@@ -12,11 +12,12 @@ from torch import Tensor
 from torchvision.models.detection import FasterRCNN
 from torchvision.models.detection.rpn import AnchorGenerator
 from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
-
+import sys
+import math
 from sklearn.metrics import confusion_matrix, accuracy_score
 
 def get_custom_faster_rcnn_model(num_classes=9):
-    model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True, weights=FasterRCNN_ResNet50_FPN_Weights.DEFAULT)
+    model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
 
@@ -24,7 +25,7 @@ def get_custom_faster_rcnn_model(num_classes=9):
     
 class CustomLesionDetector:
 
-    def __init__(self, model, device: str="cuda"):
+    def __init__(self, model=get_custom_faster_rcnn_model(), device: str="cuda", device_ids=[]):
         """Initialize the model for lesion detection.
 
         Args:
@@ -33,8 +34,9 @@ class CustomLesionDetector:
         """
         self.model = model
         self.device = device
+        self.device_ids = device_ids
 
-    def train(self, train_dataloader, epochs=10, learning_rate=1e-3):
+    def train(self, train_dataloader, epochs=10, learning_rate=1e-3, checkpoint_path=""):
         """Train the Lesion Detector.
 
         Args:
@@ -44,27 +46,46 @@ class CustomLesionDetector:
             learning_rate (float): Learning rate for the optimizer.
         """
         self.model.to(self.device)
+        # if self.device_ids != []:
+        #     self.model = nn.DataParallel(self.model, device_ids=self.device_ids)
 
-        optimizer = torch.optim.SGD(self.model.parameters(), lr=learning_rate, momentum=0.9, weight_decay=0.0005)
+        optimizer = torch.optim.SGD(self.model.parameters(), nesterov=True, lr=learning_rate, momentum=0.9, weight_decay=0.0005)
 
         for epoch in range(epochs):
             self.model.train()
             total_loss = 0
-            for batch in tqdm(train_dataloader, desc=f"Training Epoch {epoch + 1}/{epochs}", leave=False):
+            curr_loss = None
+            t = tqdm(train_dataloader, desc=f"Training Epoch {epoch + 1}/{epochs}, loss: {curr_loss}", leave=False)
+            for batch in t:
+                optimizer.zero_grad()
+
                 images, targets = batch
                 images = list(image.to(self.device) for image in images)
                 targets = [{k: v.clone().detach().to(self.device) for k, v in t.items()} for t in targets]
 
                 loss_dict = self.model(images, targets)
                 losses = sum(loss for loss in loss_dict.values())
-                total_loss += losses.item()
+                loss_value = losses.item()
+                total_loss += loss_value
 
-                optimizer.zero_grad()
+                curr_loss = loss_value
+                t.set_description(f"Training Epoch {epoch + 1}/{epochs}, Loss: {curr_loss:.4f}", refresh=True)
+                if not math.isfinite(loss_value):
+                    print(f"Loss is {loss_value}, stop  ping training")
+                    print("loss_dict:",loss_dict)
+                    print("target:", targets)
+                    self.model.eval()
+                    pred = self.model(images)
+                    print("pred:", pred)
+                    self.model.train()
+                    sys.exit(1)
+
                 losses.backward()
                 optimizer.step()
 
             avg_train_loss = total_loss / len(train_dataloader)
             print(f"Epoch {epoch + 1}/{epochs}, Training Loss: {avg_train_loss:.4f}")
+            self.save_model(checkpoint_path)
 
     def evaluate(self, val_dataloader):
         """Evaluate the model on a validation dataset.
