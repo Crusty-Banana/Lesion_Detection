@@ -92,10 +92,9 @@ class LesionDetectionDataset(LesionDataset):
             image_dir (str): Directory containing the DICOM images.
         """
         super().__init__(csv_path, image_dir)
-        print(self.data_by_image[:1])
+        # Uncomment if want to remove negative sample
         # self.data_by_image = [
         #     data
         #     for data in self.data_by_image
         #     if 8 not in data["labels"]
         # ]
-        print(self.data_by_image[:1])

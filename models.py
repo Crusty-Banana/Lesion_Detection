@@ -6,12 +6,9 @@ import torch.nn.functional as _F
 from typing import Dict, List, Tuple
 import torch
 import torchvision
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor, FasterRCNN_ResNet50_FPN_Weights
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 import torch.nn as nn
 from torch import Tensor
-from torchvision.models.detection import FasterRCNN
-from torchvision.models.detection.rpn import AnchorGenerator
-from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
 import sys
 import math
 from sklearn.metrics import confusion_matrix, accuracy_score
@@ -22,7 +19,17 @@ def get_custom_faster_rcnn_model(num_classes=9):
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
 
     return model
-    
+
+def get_custom_retina_net_model(num_classes=9):
+    model = torchvision.models.detection.retinanet_resnet50_fpn(pretrained=True)
+    model.head = torchvision.models.detection.retinanet.RetinaNetHead(
+        in_channels=256,
+        num_anchors=model.head.classification_head.num_anchors,
+        num_classes=num_classes,
+    )
+
+    return model
+
 class CustomLesionDetector:
 
     def __init__(self, model=get_custom_faster_rcnn_model(), device: str="cuda", device_ids=[]):

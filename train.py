@@ -1,9 +1,10 @@
 from torch.utils.data import DataLoader
-from models import CustomLesionDetector, get_custom_faster_rcnn_model
+from models import CustomLesionDetector, get_custom_faster_rcnn_model, get_custom_retina_net_model
 from datasets import LesionDataset, LesionDetectionDataset
 
 def train_model_with_dataset(data_path="", 
                              image_dir="",
+                             model_type="FasterRCNN",
                              model_path="",
                              batch_size=4, num_workers=4, device="cpu",
                              checkpoint_path="models/new_model",
@@ -22,7 +23,12 @@ def train_model_with_dataset(data_path="",
     dataset = LesionDetectionDataset(data_path, image_dir)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, collate_fn=lambda batch: tuple(zip(*batch)))
     
-    model = CustomLesionDetector(device=device, device_ids=device_ids)
+    model = None
+    if model_type == "FasterRCNN":
+        model = CustomLesionDetector(model=get_custom_faster_rcnn_model(),device=device, device_ids=device_ids)
+    elif (model_type == "RetinaNet"):
+        model = CustomLesionDetector(model=get_custom_retina_net_model(), device=device, device_ids=device_ids)
+
     if (model_path != ""):
         model.load_model(model_path)
 
