@@ -29,12 +29,23 @@ class LesionDataset(torch.utils.data.Dataset):
             "Other lesions": 7,
             "No finding": 8,
         }
+        self.label_map = {
+            "Osteophytes": "Abnormal",
+            "Disc space narrowing": "Abnormal",
+            "Surgical implant": "Abnormal",
+            "Foraminal stenosis": "Abnormal",
+            "Spondylolysthesis": "Abnormal",
+            "Vertebral collapse": "Abnormal",
+            "Other lesions": "Abnormal",
+            "No finding": None,
+        }
         grouped = self.data.groupby('image_id')
         self.data_by_image = [
             {
                 "image_id": image_id,
                 "boxes": grouped.get_group(image_id)[['xmin', 'ymin', 'xmax', 'ymax']].values.tolist(),
-                "labels": grouped.get_group(image_id)['lesion_type'].map(self.label_map).values.tolist()
+                "labels": grouped.get_group(image_id)['lesion_type'].map(self.label_map).values.tolist(),
+                "classes": grouped.get_group(image_id)['lesion_type'].map(self.class_map).values.tolist()
             }
             for image_id in grouped.groups
         ]

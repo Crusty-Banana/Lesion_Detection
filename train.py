@@ -1,5 +1,5 @@
 from torch.utils.data import DataLoader
-from models import CustomLesionDetector, get_custom_faster_rcnn_model, get_custom_retina_net_model
+from models import CustomLesionDetector, get_custom_faster_rcnn_model, get_custom_retina_net_model, Classifier
 from datasets import LesionDataset, LesionDetectionDataset
 
 def train_model_with_dataset(data_path="", 
@@ -28,7 +28,8 @@ def train_model_with_dataset(data_path="",
         model = CustomLesionDetector(model=get_custom_faster_rcnn_model(),device=device, device_ids=device_ids)
     elif (model_type == "RetinaNet"):
         model = CustomLesionDetector(model=get_custom_retina_net_model(), device=device, device_ids=device_ids)
-
+    elif (model_type == "Classifier"):
+        model = CustomLesionDetector(model=Classifier(), device=device, device_ids=device_ids)
     if (model_path != ""):
         model.load_model(model_path)
 

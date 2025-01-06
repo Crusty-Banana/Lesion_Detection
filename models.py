@@ -275,7 +275,6 @@ class SimpleHead(nn.Module):
 class Classifier(nn.Module):
     def __init__(
         self,
-        device,
         pixel_mean = [103.530, 116.280, 123.675],
         pixel_std = [1.,1.,1.],
         classes = ["Abnormal"],
@@ -295,11 +294,10 @@ class Classifier(nn.Module):
             backbone_out_features (list): Features to extract from DenseNet backbone.
         """
         super().__init__()
-        self.device = device
 
         # Normalize input images
-        self.pixel_mean = torch.Tensor(pixel_mean).to(self.device).view(3, 1, 1)
-        self.pixel_std = torch.Tensor(pixel_std).to(self.device).view(3, 1, 1)
+        self.pixel_mean = torch.Tensor(pixel_mean).view(3, 1, 1)
+        self.pixel_std = torch.Tensor(pixel_std).view(3, 1, 1)
         
         self.loss_fn = nn.BCEWithLogitsLoss(reduction="mean")
         self.head_in_features = in_features
@@ -342,7 +340,7 @@ class Classifier(nn.Module):
         
         if self.training:
             targets = torch.stack([x["classes"].to(self.device) for x in batched_inputs])
-            return self.loss_fn(logits, targets)
+            return {"BCE" : self.loss_fn(logits, targets)}
         
         else:
             return self.inference(logits)
