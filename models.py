@@ -12,6 +12,9 @@ from torch import Tensor
 import sys
 import math
 from sklearn.metrics import confusion_matrix, accuracy_score
+from helpers import calc_mAP
+import os
+import pickle
 
 def get_custom_faster_rcnn_model(num_classes=9):
     model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
@@ -102,27 +105,38 @@ class CustomLesionDetector:
         """
         self.model.to(self.device)
         self.model.eval()
-        all_labels = []
+        all_targets = []
         all_predictions = []
 
-        # Wrap the validation dataloader with tqdm to show progress
-        with torch.no_grad():
-            for batch in tqdm(val_dataloader, desc="Evaluating", leave=False):
-                images, targets = batch
-                images = list(image.to(self.device) for image in images)
-                targets = [{k: v.clone().detach().to(self.device) for k, v in t.items()} for t in targets]
+        # with torch.no_grad():
+        #     for batch in tqdm(val_dataloader, desc="Evaluating", leave=False):
+        #         images, targets = batch
+        #         images = list(image.to(self.device) for image in images)
 
-                predictions = self.model(images)
-                pred_box, pred_label, pred_score = predictions["boxes"], predictions["labels"], predictions["scores"]
-                
-                all_labels.extend(targets["labels"].cpu().numpy())
-                all_predictions.extend(pred_label.cpu().numpy())
+        #         predictions = self.model(images)
+        #         predictions = [{k: v.cpu().numpy() for k, v in pred.items()} for pred in predictions]
 
-        accuracy = accuracy_score(all_labels, all_predictions)
-        print(f"Validation Accuracy: {accuracy:.4f}")
+        #         all_predictions.extend(predictions)
+        #         all_targets.extend(targets)
 
-        cm = confusion_matrix(all_labels, all_predictions)
-        print("Confusion Matrix:\n", cm)
+        # # Save predictions and targets
+        # os.makedirs("preds", exist_ok=True)
+        # os.makedirs("targs", exist_ok=True)
+
+        # with open("preds/all_predictions.pkl", "wb") as f:
+        #     pickle.dump(all_predictions, f)
+
+        # with open("targs/all_targets.pkl", "wb") as f:
+        #     pickle.dump(all_targets, f)
+
+        # Load predictions and targets
+        with open("preds/all_predictions.pkl", "rb") as f:
+            all_predictions = pickle.load(f)
+
+        with open("targs/all_targets.pkl", "rb") as f:
+            all_targets = pickle.load(f)
+        mAP = calc_mAP(all_predictions, all_targets)
+        print("Mean Average Precision at Intersection Over Union (mAP@0.5):", mAP)
 
     def predict(self, image):
         """Perform inference on a single text.
@@ -156,9 +170,6 @@ class CustomLesionDetector:
         self.model = torch.load(load_path+".pth")
         print(f"Model loaded from {load_path}")
 
-
-
-   
 class CustomDenseNet(_nn.Module):
     def __init__(self, pretrained, input_channels, depth, out_features,):
         super().__init__()

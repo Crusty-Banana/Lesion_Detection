@@ -39,7 +39,7 @@ def train_model_with_dataset(data_path="",
 def evaluate_model_with_dataset(data_path="", 
                                 image_dir="",
                                 model_path="",
-                                batch_size=4, device="cpu"):
+                                batch_size=4, num_workers=4, device="cpu"):
     """Evaluate a model using a dataset.
 
     Args:
@@ -51,7 +51,7 @@ def evaluate_model_with_dataset(data_path="",
     """
 
     dataset = LesionDataset(data_path, image_dir)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4, collate_fn=lambda batch: tuple(zip(*batch)))
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, collate_fn=lambda batch: tuple(zip(*batch)))
 
     model = CustomLesionDetector(model=get_custom_faster_rcnn_model(), device=device)
     if (model_path != ""):
