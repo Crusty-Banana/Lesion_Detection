@@ -320,7 +320,7 @@ class Classifier(nn.Module):
             n_classes=len(classes),
         )
         
-    def forward(self, batched_inputs: Tuple[Dict[str, Tensor]]):
+    def forward(self, batched_inputs, targets = None):
         """
         batched_inputs: N-length list of data_dict with following items:
             "image": image tensor of shape (C,H,W)
@@ -339,7 +339,8 @@ class Classifier(nn.Module):
         logits = self.head(features)
         
         if self.training:
-            targets = torch.stack([x["classes"].to(self.device) for x in batched_inputs])
+            if not targets:
+                targets = torch.stack([x["classes"].to(self.device) for x in batched_inputs])
             return {"BCE" : self.loss_fn(logits, targets)}
         
         else:
@@ -361,7 +362,7 @@ class Classifier(nn.Module):
             original_sizes (List[Tuple[int, int]]): Original (H, W) sizes of the images before padding.
         """
         # Move images to the correct device and normalize
-        images = [x["image"].to(self.device) for x in batched_inputs]
+        images = [x.to(self.device) for x in batched_inputs]
         images = [(x - self.pixel_mean) / self.pixel_std for x in images]
 
         # Get the original sizes of images

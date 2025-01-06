@@ -29,7 +29,7 @@ class LesionDataset(torch.utils.data.Dataset):
             "Other lesions": 7,
             "No finding": 8,
         }
-        self.label_map = {
+        self.class_map = {
             "Osteophytes": "Abnormal",
             "Disc space narrowing": "Abnormal",
             "Surgical implant": "Abnormal",
