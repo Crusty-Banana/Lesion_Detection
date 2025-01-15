@@ -83,7 +83,7 @@ class LesionDataset(torch.utils.data.Dataset):
         target = {
             "boxes": boxes,
             "labels": labels,
-            "classes": torch.as_tensor(0, dtype=torch.int64),
+            "classes": torch.as_tensor(1, dtype=torch.int64),
         }
         # Try to resolve no finding sample in training but no luck.
         if (labels[0] == 8):

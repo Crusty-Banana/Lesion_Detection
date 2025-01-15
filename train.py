@@ -7,8 +7,11 @@ from models import (CustomLesionDetector,
                     get_custom_densenet_169_model,
                     get_custom_densenet_201_model)
 from datasets import LesionDataset, LesionDetectionDataset, LesionClassificationDataset
-from helpers import show_object_detection_image
+from helpers import show_object_detection_image, calc_classification_metrics
 import torch
+from sklearn.metrics import roc_curve
+import numpy as np
+
 def train_model_with_dataset(data_path="", 
                              image_dir="",
                              model_type="FasterRCNN",
@@ -73,6 +76,7 @@ def evaluate_model_with_dataset(data_path="",
     """
 
     model = None
+    type = None
     if model_type == "FasterRCNN":
         dataset = LesionDetectionDataset(data_path, image_dir)
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, collate_fn=lambda batch: tuple(zip(*batch)))
@@ -93,11 +97,39 @@ def evaluate_model_with_dataset(data_path="",
         dataset = LesionClassificationDataset(data_path, image_dir)
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, collate_fn=lambda batch: tuple(zip(*batch)))
         model = CustomAnomalyClassifier(model=get_custom_densenet_201_model(), device=device)
+    elif (model_type == "Ensemble"):
+        dataset = LesionClassificationDataset(data_path, image_dir)
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=lambda batch: tuple(zip(*batch)))
+        model = [CustomAnomalyClassifier(model=get_custom_densenet_121_model(), device=device),
+                CustomAnomalyClassifier(model=get_custom_densenet_169_model(), device=device),
+                CustomAnomalyClassifier(model=get_custom_densenet_201_model(), device=device)]
+        type = "ensemble"
 
-    if (model_path != ""):
-        model.load_model(model_path)
+    if (type == None):
+        if (model_path != ""):
+            model.load_model(model_path)
 
-    model.evaluate(dataloader)
+        model.evaluate(dataloader)
+    elif (type == "ensemble"):
+        model[0].load_model("models/densenet_121")
+        model[1].load_model("models/densenet_169")
+        model[2].load_model("models/densenet_201")
+
+        evaluations = [model[i].evaluate(dataloader) for i in range(3)]
+        probs = [eval[0] for eval in evaluations]
+        targs = evaluations[0][1]
+
+        mean_probs = [(prob1+prob2+prob3)/3 for prob1, prob2, prob3 in zip(*probs)]
+
+        fpr, tpr, _ = roc_curve(targs,mean_probs)
+
+        c = np.argmax(tpr - fpr)
+
+        preds = [(0 if prob < c else 1) for prob in mean_probs]
+        
+        print(f"At threshold c = {c:4f}, Youden's J Index is maximized.")
+        print("Ensemble of classifier evaluations:")
+        calc_classification_metrics(targs, preds, mean_probs)
 
 def inference_model(data_path="", 
                     image_dir="",
@@ -136,7 +168,12 @@ def inference_model(data_path="",
         dataset = LesionClassificationDataset(data_path, image_dir)
         model = CustomAnomalyClassifier(model=get_custom_densenet_201_model(), device=device)
         type = "classification"
-
+    elif (model_type == "Ensemble"):
+        dataset = LesionClassificationDataset(data_path, image_dir)
+        model = [CustomAnomalyClassifier(model=get_custom_densenet_121_model(), device=device),
+                CustomAnomalyClassifier(model=get_custom_densenet_169_model(), device=device),
+                CustomAnomalyClassifier(model=get_custom_densenet_201_model(), device=device)]
+        type = "ensemble"
     if (model_path != ""):
         model.load_model(model_path)
 
@@ -154,7 +191,7 @@ def inference_model(data_path="",
 
             pred_boxes, pred_labels = prediction[0]["boxes"].cpu().detach().numpy(), prediction[0]["labels"].cpu().detach().numpy()
             show_object_detection_image(og_image, pred_boxes, pred_labels, f'test_image/{idx}_prediction_image.png')
-    else:
+    elif (type == "classification"):
         for idx in range(100):
             image, target = dataset[idx]
             classes = target["classes"]
@@ -168,3 +205,5 @@ def inference_model(data_path="",
 
             print(f"Label: {classes}")
             print(f"Prediction: {prediction}")
+
+        

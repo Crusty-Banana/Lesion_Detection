@@ -81,3 +81,13 @@ python main.py --action inference --model Densenet121 --model_path models/densen
 python main.py --action inference --model Densenet169 --model_path models/densenet_169
 python main.py --action inference --model Densenet201 --model_path models/densenet_201
 ```
+
+3. Evaluate the model on the test set
+
+```
+python main.py --action test --model FasterRCNN --model_path models/beta_model
+python main.py --action test --model RetinaNet --model_path models/retina_net_10epoch_model
+python main.py --action test --model Densenet121 --model_path models/densenet_121
+python main.py --action test --model Densenet169 --model_path models/densenet_169
+python main.py --action test --model Densenet201 --model_path models/densenet_201
+```

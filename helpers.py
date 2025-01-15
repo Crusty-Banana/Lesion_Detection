@@ -2,6 +2,11 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import numpy as np
 
+from sklearn.metrics import (confusion_matrix, 
+                             accuracy_score, 
+                             roc_auc_score,
+                             f1_score)
+
 def calc_IoU(box1, box2):
     xA = max(box1[0], box2[0])
     yA = max(box1[1], box2[1])
@@ -74,3 +79,19 @@ def show_object_detection_image(image, boxes, labels, output_dir):
     plt.savefig(output_dir, bbox_inches='tight')
     print(f"Image saved to {output_dir}")
     plt.close()
+
+def calc_classification_metrics(targs, preds, probs):
+    cm = confusion_matrix(targs, preds)
+    acc = accuracy_score(targs, preds)
+    auc_roc = roc_auc_score(targs, probs)
+    f1 = f1_score(targs, preds)
+    tn, fp, fn, tp = cm.ravel()
+    sen = tp / (tp+fn)
+    spe = tn / (tn+fp)
+
+    print(f"Confusion Matrix:\n{cm}")
+    print(f"Accuracy: {acc:.2f}")
+    print(f"Area under the ROC Curve: {auc_roc:.2f}")
+    print(f"F1 Score: {f1:.2f}")
+    print(f"Sensitivity: {sen:.2f}")
+    print(f"Specificity: {spe:.2f}")

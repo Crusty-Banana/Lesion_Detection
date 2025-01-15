@@ -11,8 +11,12 @@ import torch.nn as nn
 from torch import Tensor
 import sys
 import math
-from sklearn.metrics import confusion_matrix, accuracy_score
-from helpers import calc_mAP
+from sklearn.metrics import (confusion_matrix, 
+                             accuracy_score, 
+                             roc_auc_score,
+                             f1_score)
+from helpers import (calc_mAP, 
+                     calc_classification_metrics)
 import os
 import pickle
 import numpy as np
@@ -195,14 +199,13 @@ class CustomAnomalyClassifier(CustomLesionDetector):
     def train(self, train_dataloader, epochs=10, learning_rate=1e-3, checkpoint_path=""):
         self.model.to(self.device)
         criterion = nn.BCEWithLogitsLoss()
-        optimizer = torch.optim.SGD(self.model.parameters(), lr=0.001)
+        optimizer = torch.optim.SGD(self.model.parameters(), lr=learning_rate)
 
         for epoch in range(epochs):
             self.model.train()
 
             total_loss = 0
-            curr_loss = None
-            t = tqdm(train_dataloader, desc=f"Training Epoch {epoch + 1}/{epochs}, loss: {curr_loss}", leave=False)
+            t = tqdm(train_dataloader, desc=f"Training Epoch {epoch + 1}/{epochs}, loss: {None}", leave=False)
             for batch in t:
                 images, targets = batch
                 images = torch.stack(images).to(self.device) 
@@ -217,12 +220,42 @@ class CustomAnomalyClassifier(CustomLesionDetector):
                 loss_value = losses.item()
                 total_loss += loss_value
 
-                curr_loss = loss_value
-                t.set_description(f"Training Epoch {epoch + 1}/{epochs}, Loss: {curr_loss:.4f}", refresh=True)
+                t.set_description(f"Training Epoch {epoch + 1}/{epochs}, Loss: {loss_value:.4f}", refresh=True)
             
             avg_train_loss = total_loss / len(train_dataloader)
             print(f"Epoch {epoch + 1}/{epochs}, Training Loss: {avg_train_loss:.4f}")
             self.save_model(checkpoint_path)
+
+    def evaluate(self, val_dataloader):
+        self.model.to(self.device)
+        self.model.eval()
+
+        targs = []
+        preds = []
+        probs = []
+
+        cum_sum = 0
+        t = tqdm(val_dataloader, desc=f"Evaluation in progress..", leave=False)
+        for batch in t:
+            images, targets = batch
+            images = torch.stack(images).to(self.device) 
+            
+            outputs = self.model(images)
+
+            targ = [int(t["classes"].cpu()) for t in targets]
+            pred = [(1 if output.cpu() >= 0 else 0) for output in outputs]
+            prob = [float(torch.sigmoid(output).cpu()) for output in outputs]
+
+            targs.extend(targ)
+            preds.extend(pred)
+            probs.extend(prob)
+
+            cum_sum += sum(a == b for a, b in zip(targ, pred))
+            t.set_description(f"Evaluation in progress.., Accuracy: {cum_sum/len(targs):.4f}", refresh=True)
+        
+        calc_classification_metrics(targs, preds, probs)
+
+        return probs, targs
 
 class CustomDenseNet(_nn.Module):
     def __init__(self, pretrained, input_channels, depth, out_features,):
