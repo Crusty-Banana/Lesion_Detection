@@ -3,7 +3,7 @@
 - Input: Image
 - Output: Prob of being abnormal (We called this output: P)
 - CE Loss, SGD optimizer
-- Models: DenseNet-169, DenseNet-201, DenseNet-121. 
+- Models: DenseNet-169, DenseNet-201, DenseNet-121. (Done)
 - Details: 
     - Then get ensemble of these model (average of probability of being abnormal). 
     - Image is abnormal if P >= threshold c. 
@@ -59,3 +59,25 @@ Get data:
 
 XG9ebRtEFY3EPKs
 wget -r -N -c -np --user crustybanana --ask-password https://physionet.org/files/vindr-spinexr/1.0.0/train_images/0c89242a97a3a080b70c3957728a1e89.dicom
+
+# Command to run:
+
+1. Train the models
+
+```
+python main.py --model FasterRCNN
+python main.py --model RetinaNet
+python main.py --model Densenet121
+python main.py --model Densenet169
+python main.py --model Densenet201
+```
+
+2. Inference model on 1 sample
+
+```
+python main.py --action inference --model FasterRCNN --model_path models/beta_model
+python main.py --action inference --model RetinaNet --model_path models/retina_net_10epoch_model
+python main.py --action inference --model Densenet121 --model_path models/densenet_121
+python main.py --action inference --model Densenet169 --model_path models/densenet_169
+python main.py --action inference --model Densenet201 --model_path models/densenet_201
+```

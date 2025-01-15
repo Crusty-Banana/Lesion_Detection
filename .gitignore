@@ -3,3 +3,5 @@ data
 test.py
 __pycache__/
 models/
+test_image
+classification_testing

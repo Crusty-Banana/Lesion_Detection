@@ -1,3 +1,7 @@
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+import numpy as np
+
 def calc_IoU(box1, box2):
     xA = max(box1[0], box2[0])
     yA = max(box1[1], box2[1])
@@ -40,3 +44,33 @@ def calc_mAP(predictions, targets, IoU_threshold=0.5):
 
     mAP = precision_sum / len(predictions)
     return mAP
+
+def show_object_detection_image(image, boxes, labels, output_dir):
+    fig, ax = plt.subplots(1, figsize=(12, 8))
+
+    ax.imshow(image, cmap='gray')
+    
+    for box, label in zip(boxes, labels):
+        x_min, y_min, x_max, y_max = box
+        print(box)
+        rect = patches.Rectangle(
+            (x_min, y_min),  
+            x_max - x_min,  
+            y_max - y_min,  
+            linewidth=4,
+            edgecolor='red',
+            facecolor='none'
+        )
+        ax.add_patch(rect)
+        
+        ax.text(
+            x_min, y_min - 5, label,
+            color='red', fontsize=12,
+            backgroundcolor='none'
+        )
+    
+    plt.axis('off')  
+    plt.show()
+    plt.savefig(output_dir, bbox_inches='tight')
+    print(f"Image saved to {output_dir}")
+    plt.close()

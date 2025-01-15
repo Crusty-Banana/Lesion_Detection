@@ -15,6 +15,8 @@ from sklearn.metrics import confusion_matrix, accuracy_score
 from helpers import calc_mAP
 import os
 import pickle
+import numpy as np
+import torchvision.models as models
 
 def get_custom_faster_rcnn_model(num_classes=9):
     model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
@@ -33,8 +35,24 @@ def get_custom_retina_net_model(num_classes=9):
 
     return model
 
-class CustomLesionDetector:
+def get_custom_densenet_121_model(num_classes=1):
+    model = models.densenet121(pretrained=True)
+    model.classifier = nn.Linear(model.classifier.in_features, num_classes)
 
+    return model
+
+def get_custom_densenet_169_model(num_classes=1):
+    model = models.densenet169(pretrained=True)
+    model.classifier = nn.Linear(model.classifier.in_features, num_classes)
+
+    return model
+
+def get_custom_densenet_201_model(num_classes=1):
+    model = models.densenet201(pretrained=True)
+    model.classifier = nn.Linear(model.classifier.in_features, num_classes)
+
+    return model
+class CustomLesionDetector:
     def __init__(self, model=get_custom_faster_rcnn_model(), device: str="cuda", device_ids=[]):
         """Initialize the model for lesion detection.
 
@@ -146,7 +164,7 @@ class CustomLesionDetector:
         """
         self.model.eval()
         self.model.to(self.device)
-
+        
         prediction = self.model(image)
 
         return prediction
@@ -169,6 +187,42 @@ class CustomLesionDetector:
         """
         self.model = torch.load(load_path+".pth")
         print(f"Model loaded from {load_path}")
+
+class CustomAnomalyClassifier(CustomLesionDetector):
+    def __init__(self, model=get_custom_faster_rcnn_model(), device = "cuda", device_ids=[]):
+        super().__init__(model, device, device_ids)
+    
+    def train(self, train_dataloader, epochs=10, learning_rate=1e-3, checkpoint_path=""):
+        self.model.to(self.device)
+        criterion = nn.BCEWithLogitsLoss()
+        optimizer = torch.optim.SGD(self.model.parameters(), lr=0.001)
+
+        for epoch in range(epochs):
+            self.model.train()
+
+            total_loss = 0
+            curr_loss = None
+            t = tqdm(train_dataloader, desc=f"Training Epoch {epoch + 1}/{epochs}, loss: {curr_loss}", leave=False)
+            for batch in t:
+                images, targets = batch
+                images = torch.stack(images).to(self.device) 
+                targets = torch.stack([t["classes"] for t in targets]).to(self.device)
+                
+                optimizer.zero_grad()
+                outputs = self.model(images)
+                losses = criterion(outputs, targets.float().unsqueeze(1))
+                losses.backward()
+                optimizer.step()
+
+                loss_value = losses.item()
+                total_loss += loss_value
+
+                curr_loss = loss_value
+                t.set_description(f"Training Epoch {epoch + 1}/{epochs}, Loss: {curr_loss:.4f}", refresh=True)
+            
+            avg_train_loss = total_loss / len(train_dataloader)
+            print(f"Epoch {epoch + 1}/{epochs}, Training Loss: {avg_train_loss:.4f}")
+            self.save_model(checkpoint_path)
 
 class CustomDenseNet(_nn.Module):
     def __init__(self, pretrained, input_channels, depth, out_features,):
@@ -281,6 +335,7 @@ class Classifier(nn.Module):
         in_features = ["dense4"],
         backbone_depth = 121,
         backbone_out_features = ["dense4"],
+        device =""
     ):
         """
         Initializes the Classifier.
@@ -295,11 +350,12 @@ class Classifier(nn.Module):
         """
         super().__init__()
 
+        self.device = device
         # Normalize input images
         self.pixel_mean = torch.Tensor(pixel_mean).view(3, 1, 1)
         self.pixel_std = torch.Tensor(pixel_std).view(3, 1, 1)
         
-        self.loss_fn = nn.BCEWithLogitsLoss(reduction="mean")
+        # self.loss_fn = nn.BCEWithLogitsLoss(reduction="mean")
         self.head_in_features = in_features
         self.size_divisibility = 32
 
@@ -319,7 +375,13 @@ class Classifier(nn.Module):
             input_shapes=head_input_shapes,
             n_classes=len(classes),
         )
-        
+    def loss_fn(self, predictions, classes):
+        loss = 0
+        for i in range(len(predictions)):
+            clas = classes[i]
+            pred = predictions[i]
+            loss += clas * torch.log(pred) + (1 - clas) * torch.log(1 - pred)
+        return -loss
     def forward(self, batched_inputs, targets = None):
         """
         batched_inputs: N-length list of data_dict with following items:
@@ -339,9 +401,11 @@ class Classifier(nn.Module):
         logits = self.head(features)
         
         if self.training:
-            if not targets:
-                targets = torch.stack([x["classes"].to(self.device) for x in batched_inputs])
-            return {"BCE" : self.loss_fn(logits, targets)}
+            targets = torch.stack([torch.tensor(target["classes"]) for target in targets])
+            BCE_loss = 0.0
+            for logit in logits:
+                BCE_loss += self.loss_fn(logit.resize(1, ), targets)
+            return {"BCE" : BCE_loss}
         
         else:
             return self.inference(logits)
@@ -362,8 +426,7 @@ class Classifier(nn.Module):
             original_sizes (List[Tuple[int, int]]): Original (H, W) sizes of the images before padding.
         """
         # Move images to the correct device and normalize
-        images = [x.to(self.device) for x in batched_inputs]
-        images = [(x - self.pixel_mean) / self.pixel_std for x in images]
+        images = batched_inputs
 
         # Get the original sizes of images
         original_sizes = [img.shape[1:] for img in images]  # (H, W)
